@@ -146,7 +146,7 @@ if ($argv[1] == "check") {
 
     $output = run_command("composer init --no-interaction "
         . "--repository https://code.lot.gd "
-        . "--require \"lotgd/crate-graphql:dev-version/0.4\" \"lotgd/core:dev-version/0.4\" "
+        . "--require \"lotgd/crate-graphql:dev-version/0.4\" "
         . "--name \"local/test\" "
         . "--author \"Daenerys installation script <localhost@example.com>\" "
         . "--license \"AGPL3\" "
@@ -154,6 +154,8 @@ if ($argv[1] == "check") {
     );
 
     $output = run_command("composer install");
+
+    run_command("composer require \"lotgd/core:dev-version/0.4 as v0.4.0-alpha\"");
 
     mkdir("config");
     mkdir("logs");
