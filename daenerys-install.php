@@ -121,9 +121,15 @@ if ($argv[1] == "check") {
     out("Checking the environment");
 
     $checks = [
-        "PHP" => ["7.1 or later", function(){return version_compare("7.1", PHP_VERSION, "<=");}],
-        "Directory" => ["writable", function(){return fileperms('.') & 0x0080;}],
-        "Composer" => ["available", function(){return command_exists("composer --version");}],
+        "PHP" => ["7.1 or later", function () {
+            return version_compare("7.1", PHP_VERSION, "<=");
+        }],
+        "Directory" => ["writable", function () {
+            return fileperms('.') & 0x0080;
+        }],
+        "Composer" => ["available", function () {
+            return command_exists("composer --version");
+        }],
     ];
 
     $faults = 0;
@@ -146,7 +152,7 @@ if ($argv[1] == "check") {
 
     $output = run_command("composer init --no-interaction "
         . "--repository https://code.lot.gd "
-        . "--require \"lotgd/crate-graphql:dev-version/0.4\" "
+        . "--require \"lotgd/crate-graphql:^0.4.0\" "
         . "--name \"local/test\" "
         . "--author \"Daenerys installation script <localhost@example.com>\" "
         . "--license \"AGPL3\" "
@@ -155,13 +161,25 @@ if ($argv[1] == "check") {
 
     $output = run_command("composer install");
 
-    run_command("composer require \"lotgd/core:dev-version/0.4 as v0.4.0-alpha\"");
-
     mkdir("config");
     mkdir("logs");
 
     file_put_contents("index.php", $index);
     file_put_contents("config/lotgd.yml", $config);
+
+    $name = readline("Admin account name [admin]: ")?:"admin";
+    $password = readline("Password [changeme]: ")?:"changeme";
+    $email = readline("Email address for login [admin@example.com]: ")?:"admin@example.com";
+
+    `vendor/bin/daenerys database:init`;
+    `vendor/bin/daenerys crate:user:add --username="$name" --password="$password" --email="$email"`;
+} elseif ($argv[1] == "install-module") {
+    if (isset($argv[2])) {
+        `composer require {$argv[2]}`;
+        `vendor/bin/daenerys module:register`;
+    } else {
+        print("Second argument must be a module.");
+    }
 } elseif ($argv[1] == "clean") {
     @remove_complete_dir("vendor");
     @remove_complete_dir("config");
