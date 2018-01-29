@@ -67,6 +67,49 @@ function remove_complete_dir($directory)
     return rmdir($directory);
 }
 
+/**
+ * Tries to parse cli options
+ * @param array $argv
+ * @param int $start
+ * @return array
+ */
+function get_cli_options(array $argv, int $start = 2)
+{
+    $pos = 0;
+    $options = [];
+    $last_options = null;
+    foreach ($argv as $arg) {
+        $pos++;
+
+        if ($pos <= $start) {
+            continue;
+        }
+
+        if (substr($arg, 0, 2) == "--") {
+            $last_option = substr($arg, 2);
+            $options[$last_option] = True;
+            continue;
+        }
+
+        if ($last_options === null) {
+            $last_options = ".";
+        }
+
+        if (is_bool($options[$last_options])) {
+            $options[$last_option] = $arg;
+        } elseif (is_array($options[$last_option])) {
+            $options[$last_option][] = $arg;
+        } else {
+            $v = $options[$last_option];
+            $options[$last_option] = [$v, $arg];
+        }
+    }
+
+    return $options;
+}
+
+$argOptions = get_cli_options($argv);
+
 $index = <<<'PHP'
 <?php
 
@@ -111,7 +154,7 @@ if($argc < 2) {
     out(<<<MSG
 To use daenerys, you must use one of the following modes:
     - check, checks the environment if daenerys is installable
-    - install, tries to install daenerys
+    - install, tries to install daenerys. Use --nointeraction to supress interactions.
 MSG
 );
     exit(1);
@@ -159,7 +202,17 @@ if ($argv[1] == "check") {
         . "--stability dev"
     );
 
+    if ($output[0] > 0) {
+        print("Cannot initialize composer.\n\n");
+        exit(1);
+    }
+
     $output = run_command("composer install");
+
+    if ($output[0] > 0) {
+        print("It looks like something went wrong with composer install.\n\n");
+        exit(1);
+    }
 
     mkdir("config");
     mkdir("logs");
@@ -167,12 +220,14 @@ if ($argv[1] == "check") {
     file_put_contents("index.php", $index);
     file_put_contents("config/lotgd.yml", $config);
 
-    $name = readline("Admin account name [admin]: ")?:"admin";
-    $password = readline("Password [changeme]: ")?:"changeme";
-    $email = readline("Email address for login [admin@example.com]: ")?:"admin@example.com";
+    if (!isset($argOptions["nointeraction"])) {
+        $name = readline("Admin account name [admin]: ")?:"admin";
+        $password = readline("Password [changeme]: ")?:"changeme";
+        $email = readline("Email address for login [admin@example.com]: ")?:"admin@example.com";
 
-    `vendor/bin/daenerys database:init`;
-    `vendor/bin/daenerys crate:user:add --username="$name" --password="$password" --email="$email"`;
+        `vendor/bin/daenerys database:init`;
+        `vendor/bin/daenerys crate:user:add --username="$name" --password="$password" --email="$email"`;
+    }
 } elseif ($argv[1] == "install-module") {
     if (isset($argv[2])) {
         `composer require {$argv[2]}`;
