@@ -120,6 +120,9 @@ use Symfony\Component\HttpFoundation\Request;
  */
 $loader = require __DIR__.'/vendor/lotgd/crate-graphql/app/autoload.php';
 
+// Change actual cwd
+chdir("..");
+
 $kernel = new AppKernel('prod', false);
 //$kernel->loadClassCache();
 //$kernel = new AppCache($kernel);
@@ -193,9 +196,11 @@ if ($argv[1] == "check") {
 } elseif ($argv[1] == "install") {
     out("Installation of daenerys");
 
+    $minVersion = "0.4.0";
+
     $output = run_command("composer init --no-interaction "
         . "--repository https://code.lot.gd "
-        . "--require \"lotgd/crate-graphql:^0.4.0\" "
+        . "--require \"lotgd/crate-graphql:^$minVersion\" "
         . "--name \"local/test\" "
         . "--author \"Daenerys installation script <localhost@example.com>\" "
         . "--license \"AGPL3\" "
@@ -216,17 +221,40 @@ if ($argv[1] == "check") {
 
     mkdir("config");
     mkdir("logs");
+    mkdir("graphql");
 
-    file_put_contents("index.php", $index);
+    file_put_contents("graphql/index.php", $index);
     file_put_contents("config/lotgd.yml", $config);
 
     if (!isset($argOptions["nointeraction"])) {
-        $name = readline("Admin account name [admin]: ")?:"admin";
-        $password = readline("Password [changeme]: ")?:"changeme";
-        $email = readline("Email address for login [admin@example.com]: ")?:"admin@example.com";
+        $name = readline("Admin account name [admin]: ") ?: "admin";
+        $password = readline("Password [changeme]: ") ?: "changeme";
+        $email = readline("Email address for login [admin@example.com]: ") ?: "admin@example.com";
 
         `vendor/bin/daenerys database:init`;
         `vendor/bin/daenerys crate:user:add --username="$name" --password="$password" --email="$email"`;
+    }
+
+    # Get client
+    $clientData = json_decode(file_get_contents("https://gist.githubusercontent.com/Vassyli/0fae7bce5489fcb3d0cf946781334bae/raw"));
+
+    $maxVersion = "v".$minVersion;
+    $currentDownload = null;
+    foreach ($clientData as $version => $download) {
+        if (version_compare(substr($version, 1), substr($maxVersion, 1), ">=")) {
+            $maxVersion = $version;
+            $currentDownload = $download;
+        }
+    }
+
+    if ($currentDownload !== null) {
+        print("Compatible client found, downloading $currentDownload.");
+
+        file_put_contents("client.tar.gz", file_get_contents($currentDownload));
+        `tar -xzvf client.tar.gz`;
+        @unlink("client.tar.gz");
+    } else {
+        print("No compatible not found.");
     }
 } elseif ($argv[1] == "install-module") {
     if (isset($argv[2])) {
@@ -239,10 +267,13 @@ if ($argv[1] == "check") {
     @remove_complete_dir("vendor");
     @remove_complete_dir("config");
     @remove_complete_dir("logs");
+    @remove_complete_dir("graphql");
 
     @unlink("composer.json");
     @unlink("composer.lock");
-    @unlink("index.php");
+    @unlink("index.html");
+    @unlink("bundle.js");
+    @unlink("style.css");
 } elseif ($argv[1] == "run-test") {
     # Runs a test server (do not use for production!)
     `php -S localhost:8000 -t .`;
