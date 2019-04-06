@@ -113,22 +113,31 @@ $argOptions = get_cli_options($argv);
 $index = <<<'PHP'
 <?php
 
+use LotGD\Crate\WWW\Kernel;
+use Symfony\Component\Debug\Debug;
 use Symfony\Component\HttpFoundation\Request;
 
-/**
- * @var Composer\Autoload\ClassLoader
- */
-$loader = require __DIR__.'/vendor/lotgd/crate-graphql/app/autoload.php';
+require __DIR__.'/vendor/autoload.php';
 
-// Change actual cwd
-chdir("..");
+$_SERVER['APP_ENV'] = "prod";
+$_SERVER['APP_DEBUG'] = false;
 
-$kernel = new AppKernel('prod', false);
-//$kernel->loadClassCache();
-//$kernel = new AppCache($kernel);
 
-// When using the HttpCache, you need to call the method in your front controller instead of relying on the configuration parameter
-//Request::enableHttpMethodParameterOverride();
+if ($_SERVER['APP_DEBUG']) {
+    umask(0000);
+
+    Debug::enable();
+}
+
+if ($trustedProxies = $_SERVER['TRUSTED_PROXIES'] ?? $_ENV['TRUSTED_PROXIES'] ?? false) {
+    Request::setTrustedProxies(explode(',', $trustedProxies), Request::HEADER_X_FORWARDED_ALL ^ Request::HEADER_X_FORWARDED_HOST);
+}
+
+if ($trustedHosts = $_SERVER['TRUSTED_HOSTS'] ?? $_ENV['TRUSTED_HOSTS'] ?? false) {
+    Request::setTrustedHosts([$trustedHosts]);
+}
+
+$kernel = new Kernel($_SERVER['APP_ENV'], (bool) $_SERVER['APP_DEBUG']);
 $request = Request::createFromGlobals();
 $response = $kernel->handle($request);
 $response->send();
@@ -141,6 +150,7 @@ database:
     name: daenerys
     user: root
     password:
+    disableAutoSchemaUpdate: false
 game:
     epoch: 2016-07-01 00:00:00.0 -8
     offsetSeconds: 0
@@ -149,9 +159,32 @@ logs:
     path: ../logs
 YML;
 
+$composer = <<<'JSON'
+{
+    "name": "local/test",
+    "require": {
+        "lotgd/crate-html": "^0.5.0-alpha"
+    },
+    "license": "AGPL3",
+    "authors": [
+        {
+            "name": "Daenerys installation script",
+            "email": "localhost@example.com"
+        }
+    ],
+    "repositories": [
+        {
+            "type": "composer",
+            "url": "https://raw.githubusercontent.com/lotgd/packages/master/build/packages.json"
+        }
+    ],
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
+JSON;
 
 
-out("Daenerys installer, version 0.1");
+out("Daenerys installer, version 0.2");
 
 if($argc < 2) {
     out(<<<MSG
@@ -196,21 +229,10 @@ if ($argv[1] == "check") {
 } elseif ($argv[1] == "install") {
     out("Installation of daenerys");
 
-    $minVersion = "0.4.0";
+    // @ToDo: Let the user set some options here.
+    $minVersion = "0.5.0-alpha";
 
-    $output = run_command("composer init --no-interaction "
-        . "--repository https://code.lot.gd "
-        . "--require \"lotgd/crate-graphql:^$minVersion\" "
-        . "--name \"local/test\" "
-        . "--author \"Daenerys installation script <localhost@example.com>\" "
-        . "--license \"AGPL3\" "
-        . "--stability dev"
-    );
-
-    if ($output[0] > 0) {
-        print("Cannot initialize composer.\n\n");
-        exit(1);
-    }
+    file_put_contents("composer.json", $composer);
 
     $output = run_command("composer install");
 
@@ -221,41 +243,26 @@ if ($argv[1] == "check") {
 
     mkdir("config");
     mkdir("logs");
-    mkdir("graphql");
+    mkdir("css");
+    mkdir("icons");
 
-    file_put_contents("graphql/index.php", $index);
+    file_put_contents("index.php", $index);
     file_put_contents("config/lotgd.yml", $config);
+
+    # Initialise database
+    `vendor/bin/daenerys database:init`;
 
     if (!isset($argOptions["nointeraction"])) {
         $name = readline("Admin account name [admin]: ") ?: "admin";
         $password = readline("Password [changeme]: ") ?: "changeme";
         $email = readline("Email address for login [admin@example.com]: ") ?: "admin@example.com";
 
-        `vendor/bin/daenerys database:init`;
         `vendor/bin/daenerys crate:user:add --username="$name" --password="$password" --email="$email"`;
     }
 
-    # Get client
-    $clientData = json_decode(file_get_contents("https://gist.githubusercontent.com/Vassyli/0fae7bce5489fcb3d0cf946781334bae/raw"));
-
-    $maxVersion = "v".$minVersion;
-    $currentDownload = null;
-    foreach ($clientData as $version => $download) {
-        if (version_compare(substr($version, 1), substr($maxVersion, 1), ">=")) {
-            $maxVersion = $version;
-            $currentDownload = $download;
-        }
-    }
-
-    if ($currentDownload !== null) {
-        print("Compatible client found, downloading $currentDownload.");
-
-        file_put_contents("client.tar.gz", file_get_contents($currentDownload));
-        `tar -xzvf client.tar.gz`;
-        @unlink("client.tar.gz");
-    } else {
-        print("No compatible not found.");
-    }
+    # Install assets
+    `cp vendor/lotgd/crate-html/public/css/* css`;
+    `cp vendor/lotgd/crate-html/public/icons/* icons`;
 } elseif ($argv[1] == "install-module") {
     if (isset($argv[2])) {
         `composer require {$argv[2]}`;
@@ -267,7 +274,8 @@ if ($argv[1] == "check") {
     @remove_complete_dir("vendor");
     @remove_complete_dir("config");
     @remove_complete_dir("logs");
-    @remove_complete_dir("graphql");
+    @remove_complete_dir("css");
+    @remove_complete_dir("icons");
 
     @unlink("composer.json");
     @unlink("composer.lock");
