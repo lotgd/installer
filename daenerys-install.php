@@ -77,7 +77,7 @@ function get_cli_options(array $argv, int $start = 2)
 {
     $pos = 0;
     $options = [];
-    $last_options = null;
+    $last_option = null;
     foreach ($argv as $arg) {
         $pos++;
 
@@ -91,11 +91,12 @@ function get_cli_options(array $argv, int $start = 2)
             continue;
         }
 
-        if ($last_options === null) {
-            $last_options = ".";
+        if ($last_option === null) {
+            $last_option = ".";
+            $options[$last_option] = [];
         }
 
-        if (is_bool($options[$last_options])) {
+        if (is_bool($options[$last_option])) {
             $options[$last_option] = $arg;
         } elseif (is_array($options[$last_option])) {
             $options[$last_option][] = $arg;
@@ -163,7 +164,7 @@ $composer = <<<'JSON'
 {
     "name": "local/test",
     "require": {
-        "lotgd/crate-html": "^0.5.0-alpha"
+        "lotgd/crate-html": "dev-master"
     },
     "license": "AGPL3",
     "authors": [
@@ -258,15 +259,40 @@ if ($argv[1] == "check") {
         $email = readline("Email address for login [admin@example.com]: ") ?: "admin@example.com";
 
         `vendor/bin/daenerys crate:user:add --username="$name" --password="$password" --email="$email"`;
+    } else {
+        `vendor/bin/daenerys crate:user:add --username="admin" --password="changeme" --email="admin@example.com"`;
     }
 
     # Install assets
     `cp vendor/lotgd/crate-html/public/css/* css`;
     `cp vendor/lotgd/crate-html/public/icons/* icons`;
+
+    # Install modules if given
+    if (isset($argOptions["installDefaultModules"])) {
+        $moduleList = [
+            "lotgd/module-village",
+            "lotgd/module-scene-bundle",
+            "lotgd/module-new-day",
+            "lotgd/module-gender",
+            "lotgd/module-res-charstats",
+            "lotgd/module-forest",
+            "lotgd/module-training",
+        ];
+        $moduleList = implode(" ", $moduleList);
+        `composer require $moduleList`;
+    }
+
+    `vendor/bin/daenerys database:schemaUpdate`;
+    `vendor/bin/daenerys module:register`;
+    `vendor/bin/console cache:clear`;
 } elseif ($argv[1] == "install-module") {
     if (isset($argv[2])) {
+        `composer update`;
         `composer require {$argv[2]}`;
+
+        `vendor/bin/daenerys database:schemaUpdate`;
         `vendor/bin/daenerys module:register`;
+        `vendor/bin/console cache:clear`;
     } else {
         print("Second argument must be a module.");
     }
