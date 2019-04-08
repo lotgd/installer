@@ -185,7 +185,7 @@ $composer = <<<'JSON'
 JSON;
 
 
-out("Daenerys installer, version 0.2");
+out("Daenerys installer, version 0.5.0");
 
 if($argc < 2) {
     out(<<<MSG
