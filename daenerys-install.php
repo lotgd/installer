@@ -164,7 +164,7 @@ $composer = <<<'JSON'
 {
     "name": "local/test",
     "require": {
-        "lotgd/crate-html": "dev-master"
+        "lotgd/crate-html": ">=0.5.3"
     },
     "license": "AGPL3",
     "authors": [
@@ -185,7 +185,7 @@ $composer = <<<'JSON'
 JSON;
 
 
-out("Daenerys installer, version 0.5.0");
+out("Daenerys installer, version 0.5.3");
 
 if($argc < 2) {
     out(<<<MSG
@@ -231,7 +231,7 @@ if ($argv[1] == "check") {
     out("Installation of daenerys");
 
     // @ToDo: Let the user set some options here.
-    $minVersion = "0.5.0-alpha";
+    $minVersion = "0.5.1";
 
     file_put_contents("composer.json", $composer);
 
@@ -252,16 +252,20 @@ if ($argv[1] == "check") {
 
     # Initialise database
     `vendor/bin/daenerys database:init`;
+    `vendor/bin/daenerys crate:role:add ROLE_SUPERUSER`;
 
     if (!isset($argOptions["nointeraction"])) {
         $name = readline("Admin account name [admin]: ") ?: "admin";
         $password = readline("Password [changeme]: ") ?: "changeme";
         $email = readline("Email address for login [admin@example.com]: ") ?: "admin@example.com";
 
-        `vendor/bin/daenerys crate:user:add --username="$name" --password="$password" --email="$email"`;
+        `vendor/bin/daenerys crate:user:add "$name" "$email" "$password"`;
     } else {
-        `vendor/bin/daenerys crate:user:add --username="admin" --password="changeme" --email="admin@example.com"`;
+        $name = "admin";
+        `vendor/bin/daenerys crate:user:add admin "admin@example.com" changeme`;
     }
+
+    `vendor/bin/daenerys crate:role:grant ROLE_SUPERUSER $name`;
 
     # Install assets
     `cp vendor/lotgd/crate-html/public/css/* css`;
