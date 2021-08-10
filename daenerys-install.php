@@ -323,6 +323,7 @@ if ($argv[1] == "check") {
     @unlink("composer.json");
     @unlink("composer.lock");
     @unlink("index.html");
+    @unlink("index.php");
     @unlink("bundle.js");
     @unlink("style.css");
 
