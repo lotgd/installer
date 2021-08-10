@@ -4,7 +4,7 @@ This repository offers a simple installation script for installing a running dae
 
 ## Requirements
 
-- PHP in version 7.1 or newer
+- PHP in version 8.0 or newer
 - Available composer command
 - Directory must be writable.
 

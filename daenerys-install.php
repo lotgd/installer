@@ -164,7 +164,8 @@ $composer = <<<'JSON'
 {
     "name": "local/test",
     "require": {
-        "lotgd/crate-html": ">=0.5.3"
+        "lotgd/crate-html": "{{crate-version}}",
+        "lotgd/core": "{{core-version}}"
     },
     "license": "AGPL3",
     "authors": [
@@ -185,7 +186,7 @@ $composer = <<<'JSON'
 JSON;
 
 
-out("Daenerys installer, version 0.5.3");
+out("Daenerys installer, version 0.6.0");
 
 if($argc < 2) {
     out(<<<MSG
@@ -201,8 +202,8 @@ if ($argv[1] == "check") {
     out("Checking the environment");
 
     $checks = [
-        "PHP" => ["7.1 or later", function () {
-            return version_compare("7.1", PHP_VERSION, "<=");
+        "PHP" => ["8.0 or later", function () {
+            return version_compare("8.0", PHP_VERSION, "<=");
         }],
         "Directory" => ["writable", function () {
             return fileperms('.') & 0x0080;
@@ -231,11 +232,15 @@ if ($argv[1] == "check") {
     out("Installation of daenerys");
 
     // @ToDo: Let the user set some options here.
-    $minVersion = "0.5.1";
+    $crateVersion = "dev-master";
+    $coreVersion = "dev-master as 0.6.0";
+
+    $composer = str_replace("{{crate-version}}", $crateVersion, $composer);
+    $composer = str_replace("{{core-version}}", $coreVersion, $composer);
 
     file_put_contents("composer.json", $composer);
 
-    $output = run_command("composer install");
+    $output = run_command("composer update");
 
     if ($output[0] > 0) {
         print("It looks like something went wrong with composer install.\n\n");
@@ -253,6 +258,7 @@ if ($argv[1] == "check") {
     # Initialise database
     `vendor/bin/daenerys database:init`;
     `vendor/bin/daenerys crate:role:add ROLE_SUPERUSER`;
+    `vendor/bin/daenerys crate:role:add ROLE_SCENE_EDITOR`;
 
     if (!isset($argOptions["nointeraction"])) {
         $name = readline("Admin account name [admin]: ") ?: "admin";
@@ -266,6 +272,9 @@ if ($argv[1] == "check") {
     }
 
     `vendor/bin/daenerys crate:role:grant ROLE_SUPERUSER $name`;
+    `vendor/bin/daenerys crate:adminToolbox:add scenes "Scene Toolbox" "LotGD\\Crate\\WWW\\AdministrationToolboxes\\SceneToolbox" ROLE_SUPERUSER ROLE_SCENE_EDITOR`;
+    `vendor/bin/daenerys crate:adminToolbox:add users "User Toolbox" "LotGD\\Crate\\WWW\\AdministrationToolboxes\\UserToolbox" ROLE_SUPERUSER`;
+    `vendor/bin/daenerys crate:adminToolbox:add characters "Character Toolbox" "LotGD\\Crate\\WWW\\AdministrationToolboxes\\CharacterToolbox" ROLE_SUPERUSER`;
 
     # Install assets
     `cp vendor/lotgd/crate-html/public/css/* css`;
@@ -273,6 +282,8 @@ if ($argv[1] == "check") {
 
     # Install modules if given
     if (isset($argOptions["installDefaultModules"])) {
+        out("Install default modules.");
+
         $moduleList = [
             "lotgd/module-village",
             "lotgd/module-scene-bundle",
@@ -281,6 +292,8 @@ if ($argv[1] == "check") {
             "lotgd/module-res-charstats",
             "lotgd/module-forest",
             "lotgd/module-training",
+            "lotgd/module-res-wealth",
+            "lotgd/module-dragon-kills",
         ];
         $moduleList = implode(" ", $moduleList);
         `composer require $moduleList`;
@@ -312,6 +325,8 @@ if ($argv[1] == "check") {
     @unlink("index.html");
     @unlink("bundle.js");
     @unlink("style.css");
+
+    out("Installation removed.");
 } elseif ($argv[1] == "run-test") {
     # Runs a test server (do not use for production!)
     `php -S localhost:8000 -t .`;
